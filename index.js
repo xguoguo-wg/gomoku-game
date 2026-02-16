@@ -990,6 +990,16 @@
     }
   });
 
+  btnAgreeUndo.addEventListener('click', () => {
+    wsSend({ type: 'undo_response', approved: true });
+    undoRequestOverlay.classList.remove('visible');
+  });
+
+  btnRejectUndo.addEventListener('click', () => {
+    wsSend({ type: 'undo_response', approved: false });
+    undoRequestOverlay.classList.remove('visible');
+  });
+
   btnUndo.addEventListener('click', () => {
     if (gameMode === 'lan') {
       // 只有轮到对方下棋（说明我刚下过），才能请求悔棋
