@@ -98,6 +98,18 @@
           <label class="settings-group__label">创建房间</label>
           <div class="lobby-create">
             <input type="text" class="lobby-input" id="roomNameInput" placeholder="房间名（可选）" maxlength="20">
+            <div class="lobby-color-select">
+              <label class="radio-label">
+                <input type="radio" name="createColor" value="black" checked>
+                <span class="radio-custom black"></span>
+                执黑
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="createColor" value="white">
+                <span class="radio-custom white"></span>
+                执白
+              </label>
+            </div>
             <button class="btn btn--primary" id="btnCreateRoom">创建</button>
           </div>
         </div>
@@ -136,6 +148,18 @@
         <p class="waiting-card__info">房间名: <span id="waitingRoomName">—</span></p>
         <p class="waiting-card__tip">将房间 ID 分享给局域网内的朋友</p>
         <button class="btn btn--secondary" id="btnLeaveRoom">取消等待</button>
+      </div>
+    </div>
+
+    <!-- ===== 悔棋请求弹窗 ===== -->
+    <div class="result-overlay" id="undoRequestOverlay">
+      <div class="result-card">
+        <div class="result-card__icon">❓</div>
+        <div class="result-card__text">对方请求悔棋</div>
+        <div class="controls" style="justify-content: center;">
+          <button class="btn btn--primary" id="btnAgreeUndo">同意</button>
+          <button class="btn btn--secondary" id="btnRejectUndo">拒绝</button>
+        </div>
       </div>
     </div>
 

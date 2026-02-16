@@ -59,16 +59,18 @@ function generateRoomId() {
  *   gameOver: boolean,
  * }
  */
-function createRoom(name) {
+function createRoom(name, creatorColor) {
     const id = generateRoomId();
     const room = {
         id,
         name: name || `房间 ${id}`,
         players: [null, null],
         board: Array.from({ length: SIZE }, () => Array(SIZE).fill(0)),
+        history: [], // Track moves for undo
         currentPlayer: 1, // BLACK first
         gameStarted: false,
         gameOver: false,
+        hostColor: creatorColor === 'white' ? 2 : 1 // 1=BLACK, 2=WHITE
     };
     rooms.set(id, room);
     return room;
@@ -83,6 +85,7 @@ function getRoomList() {
             name: room.name,
             playerCount,
             gameStarted: room.gameStarted,
+            hostColor: room.hostColor,
         });
     }
     return list;
@@ -191,13 +194,14 @@ wss.on('connection', (ws) => {
                 // 先离开已有房间
                 leaveAllRooms(ws);
 
-                const room = createRoom(msg.name);
-                room.players[0] = ws; // 房主执黑
+                const room = createRoom(msg.name, msg.color);
+                const pIdx = room.hostColor === 1 ? 0 : 1; // 1->0(BLACK), 2->1(WHITE)
+                room.players[pIdx] = ws;
                 send(ws, {
                     type: 'room_created',
                     roomId: room.id,
                     roomName: room.name,
-                    playerIndex: 0, // 黑棋
+                    playerIndex: pIdx,
                 });
                 broadcastRoomList();
                 break;
@@ -265,6 +269,7 @@ wss.on('connection', (ws) => {
                 }
 
                 room.board[r][c] = color;
+                room.history.push({ r, c, color });
                 broadcast(room, {
                     type: 'stone_placed',
                     r,
@@ -310,6 +315,118 @@ wss.on('connection', (ws) => {
                 // 简化：直接重开
                 if (room.players[0] && room.players[1]) {
                     startGameInRoom(room);
+                }
+                break;
+            }
+
+            case 'request_undo': {
+                const room = findRoom(ws);
+                if (!room || !room.gameStarted || room.gameOver) break;
+                // 转发给对方
+                const opIdx = getPlayerIndex(room, ws) === 0 ? 1 : 0;
+                const opponent = room.players[opIdx];
+                if (opponent) {
+                    send(opponent, { type: 'undo_requested' });
+                }
+                break;
+            }
+
+            case 'undo_response': {
+                const room = findRoom(ws);
+                if (!room || !room.gameStarted || room.gameOver) break;
+
+                if (msg.approved && room.history.length > 0) {
+                    // 撤销 history 最后一步
+                    const last = room.history.pop();
+                    room.board[last.r][last.c] = 0;
+
+                    // 切换回上一个执棋者
+                    room.currentPlayer = last.color;
+
+                    broadcast(room, {
+                        type: 'undo_executed',
+                    });
+
+                    broadcast(room, {
+                        type: 'turn_change',
+                        currentPlayer: room.currentPlayer,
+                    });
+                }
+
+                // 通知请求者结果
+                if (!msg.approved) {
+                    const opIdx = getPlayerIndex(room, ws) === 0 ? 1 : 0;
+                    const requester = room.players[opIdx];
+                    if (requester) {
+                        send(requester, { type: 'undo_response', approved: false });
+                    }
+                }
+                break;
+            }
+
+            case 'request_undo': {
+                const room = findRoom(ws);
+                if (!room || !room.gameStarted || room.gameOver) break;
+                // 转发给对方
+                const opIdx = getPlayerIndex(room, ws) === 0 ? 1 : 0;
+                const opponent = room.players[opIdx];
+                if (opponent) {
+                    send(opponent, { type: 'undo_requested' });
+                }
+                break;
+            }
+
+            case 'undo_response': {
+                const room = findRoom(ws);
+                if (!room || !room.gameStarted || room.gameOver) break;
+                // 如果同意
+                if (msg.approved) {
+                    // 回退一步（双方各退一步，或者只退当前落子的人）
+                    // 简单逻辑：撤销 history 中最后一步，并切换 currentPlayer
+                    // 实际上通常悔棋是悔“两步”（回到自己回合），或者“一步”（回到对方回合）
+                    // 这里简化：收到同意后，通知双方“触发悔棋”，客户端自己处理回退逻辑（或者服务器处理）
+
+                    // 服务器端简单处理：假设悔一步（回到上一个人）
+                    // 但通常请求悔棋的人是“刚落子的人”，所以现在的 currentPlayer 是对方
+                    // 所以退一步，currentPlayer 变回 请求者
+
+                    // 稍微复杂点：如果 history 保存了服务端状态
+                    // 这里服务器只有 board，没有 history。
+                    // 所以最好是广播“undo_executed”，让客户端自己 pop history 并重绘
+                    // 但服务器 board 也得改。
+                    // 鉴于 server.js 没存 history，很难精确回退 board。
+                    // 方案：让客户端发回 undo 后的 board？不安全。
+                    // 方案：服务器只负责转发 undo 指令，board 状态由客户端同步？不太好。
+                    // 方案：服务器记录 history。
+
+                    // 既然 server.js 目前也没校验 board 连贯性（只校验空位），
+                    // 我们可以让客户端发送“我要撤销到哪一步”或者服务器增加 history 记录。
+                    // 为了不改动太大：
+                    // 我们给 server.js 增加简易 history 记录
+                    // 或者：服务器只转发 undo_approved，客户端自己处理 UI，
+                    // 下次落子时覆盖服务器 board。
+                    // 因为 place_stone 会直接修改 board[r][c] = color
+                    // 如果我们允许客户端 undo，客户端 board 变了，
+                    // 再次落子时，服务器 board 那个旧位置还是有子的。
+                    // 所以必须清除服务器 board 对应位置。
+
+                    // 临时方案：request_undo 时，客户端把要清除的坐标发过来？
+                    // 不，服务器应该记录。
+
+                    // 让我们给 server.js 的 room 增加 history
+
+                    // 重新根据 task 描述：
+                    // "Update server.js to handle request_undo and undo_response"
+                    // 我直接转发 undo_response 给 requester，并附带 "approved: true"
+                    // 同时广播 "undo_executed"，带上要清除的坐标？
+
+                    // 鉴于 server.js 现有代码没有 history，我将在 on place_stone 时记录 history。
+                }
+
+                const opIdx = getPlayerIndex(room, ws) === 0 ? 1 : 0;
+                const requester = room.players[opIdx];
+                if (requester) {
+                    send(requester, { type: 'undo_response', approved: msg.approved });
                 }
                 break;
             }

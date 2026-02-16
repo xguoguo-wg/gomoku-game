@@ -58,6 +58,9 @@
   const waitingRoomName = document.getElementById('waitingRoomName');
   const btnLeaveRoom = document.getElementById('btnLeaveRoom');
   const btnBackToMenu = document.getElementById('btnBackToMenu');
+  const undoRequestOverlay = document.getElementById('undoRequestOverlay');
+  const btnAgreeUndo = document.getElementById('btnAgreeUndo');
+  const btnRejectUndo = document.getElementById('btnRejectUndo');
   const gameMain = document.getElementById('gameMain');
   const footerTip = document.getElementById('footerTip');
 
@@ -381,6 +384,27 @@
         onlineRoomId = null;
         break;
 
+      case 'undo_requested':
+        undoRequestOverlay.classList.add('visible');
+        break;
+
+      case 'undo_response':
+        if (!msg.approved) {
+          alert('对方拒绝了你的悔棋请求');
+          updateOnlineStatus();
+        }
+        break;
+
+      case 'undo_executed':
+        // 执行悔棋
+        if (history.length > 0) {
+          const last = history.pop();
+          board[last.r][last.c] = EMPTY;
+          winLine = null;
+          render();
+        }
+        break;
+
       case 'error':
         alert(msg.message);
         break;
@@ -394,17 +418,23 @@
     }
     roomListEl.innerHTML = rooms
       .filter(r => !r.gameStarted) // 只显示可加入的房间
-      .map(r => `
+      .map(r => {
+        let statusText = '';
+        if (r.playerCount < 2) {
+          const hostColor = r.hostColor === 1 ? '黑' : '白';
+          statusText = `房主执${hostColor}`;
+        }
+        return `
         <div class="lobby-room-item">
           <div class="lobby-room-item__info">
             <span class="lobby-room-item__name">${escHtml(r.name)}</span>
-            <span class="lobby-room-item__id">ID: ${r.id}</span>
+            <span class="lobby-room-item__id">ID: ${r.id} · ${statusText}</span>
           </div>
           <span class="lobby-room-item__count">${r.playerCount}/2</span>
           <button class="btn btn--primary lobby-join-btn" data-room-id="${r.id}"
             ${r.playerCount >= 2 ? 'disabled' : ''}>加入</button>
         </div>
-      `).join('');
+      `}).join('');
 
     if (roomListEl.innerHTML.trim() === '') {
       roomListEl.innerHTML = '<div class="lobby-empty">暂无可加入房间</div>';
@@ -448,7 +478,8 @@
     scoreLabelLeft.textContent = '你';
     scoreLabelRight.textContent = '对手';
     footerTip.textContent = '联机对战中 · 点击棋盘交叉点落子';
-    btnUndo.style.display = 'none'; // 联机模式隐藏悔棋
+    footerTip.textContent = '联机对战中 · 点击棋盘交叉点落子';
+    btnUndo.style.display = ''; // 显示悔棋按钮
 
     showGame();
     updateOnlineStatus();
@@ -573,6 +604,8 @@
     if (gameOver) return;
     if (gameMode === 'lan') {
       updateOnlineStatus();
+      // 只有轮到对方时（我刚下完），且有历史记录，可以悔棋
+      btnUndo.disabled = (currentPlayer === myColor) || history.length === 0;
       return;
     }
     const isPlayerTurn = currentPlayer === playerColor;
@@ -644,6 +677,7 @@
       popScore(scoreDraw);
     }
     updateScores();
+    statusText.textContent = winner === playerColor ? '你赢了！' : winner === aiColor ? 'AI 赢了！' : '平局！';
     statusText.textContent = winner === playerColor ? '你赢了！' : winner === aiColor ? 'AI 赢了！' : '平局！';
     btnUndo.disabled = true;
     setTimeout(() => resultOverlay.classList.add('visible'), 400);
@@ -915,7 +949,9 @@
   // 联机大厅
   btnCreateRoom.addEventListener('click', () => {
     const name = roomNameInput.value.trim();
-    wsSend({ type: 'create_room', name });
+    const colorInput = document.querySelector('input[name="createColor"]:checked');
+    const color = colorInput ? colorInput.value : 'black';
+    wsSend({ type: 'create_room', name, color });
   });
 
   btnJoinRoom.addEventListener('click', () => {
@@ -955,7 +991,14 @@
   });
 
   btnUndo.addEventListener('click', () => {
-    if (gameMode === 'lan') return; // 联机不允许悔棋
+    if (gameMode === 'lan') {
+      // 只有轮到对方下棋（说明我刚下过），才能请求悔棋
+      if (currentPlayer !== myColor && !gameOver) {
+        wsSend({ type: 'request_undo' });
+        statusText.textContent = '已发送悔棋请求…';
+      }
+      return;
+    }
     if (history.length < 2 || aiThinking || gameOver) return;
     const last1 = history.pop();
     board[last1.r][last1.c] = EMPTY;
