@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>五子棋 — 人机对弈 & 联机对战</title>
+  <meta name="description" content="在线五子棋游戏，支持人机对弈和局域网联机对战。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+
+<body>
+  <div class="app">
+    <!-- 背景装饰 -->
+    <div class="bg-orb bg-orb--1"></div>
+    <div class="bg-orb bg-orb--2"></div>
+    <div class="bg-orb bg-orb--3"></div>
+
+    <!-- 标题 -->
+    <header class="header">
+      <h1 class="header__title">
+        <span class="header__icon">⚫</span>
+        五子棋
+        <span class="header__icon">⚪</span>
+      </h1>
+      <p class="header__subtitle" id="headerSubtitle">选择游戏模式</p>
+    </header>
+
+    <!-- ===== 模式选择界面 ===== -->
+    <div class="mode-select visible" id="modeSelect">
+      <div class="mode-card" id="modeAI">
+        <div class="mode-card__icon">🤖</div>
+        <div class="mode-card__title">人机对弈</div>
+        <div class="mode-card__desc">与 AI 对战，支持多种难度</div>
+      </div>
+      <div class="mode-card" id="modeLAN">
+        <div class="mode-card__icon">🌐</div>
+        <div class="mode-card__title">联机对战</div>
+        <div class="mode-card__desc">局域网内创建或加入房间</div>
+      </div>
+    </div>
+
+    <!-- ===== AI 设置弹窗 ===== -->
+    <div class="settings-overlay" id="settingsOverlay">
+      <div class="settings-card">
+        <h2 class="settings-card__title">⚙️ 游戏设置</h2>
+
+        <div class="settings-group">
+          <label class="settings-group__label">选择先后手</label>
+          <div class="settings-options" id="orderOptions">
+            <button class="settings-opt active" data-value="black">
+              <span class="status-bar__stone status-bar__stone--black"></span>
+              执黑先行
+            </button>
+            <button class="settings-opt" data-value="white">
+              <span class="status-bar__stone status-bar__stone--white"></span>
+              执白后手
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <label class="settings-group__label">AI 难度</label>
+          <div class="settings-options" id="difficultyOptions">
+            <button class="settings-opt" data-value="easy">🟢 简单</button>
+            <button class="settings-opt active" data-value="medium">🟡 中等</button>
+            <button class="settings-opt" data-value="hard">🔴 困难</button>
+          </div>
+        </div>
+
+        <button class="btn btn--primary settings-card__start" id="btnStartGame">
+          开始对弈
+        </button>
+        <button class="btn btn--secondary settings-card__start" id="btnBackFromSettings" style="margin-top:8px">
+          ← 返回
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== 联机大厅 ===== -->
+    <div class="lobby-overlay" id="lobbyOverlay">
+      <div class="lobby-card">
+        <h2 class="lobby-card__title">🌐 联机大厅</h2>
+
+        <!-- 连接状态 -->
+        <div class="lobby-status" id="lobbyStatus">
+          <span class="lobby-status__dot"></span>
+          <span class="lobby-status__text">连接中…</span>
+        </div>
+
+        <!-- 创建房间 -->
+        <div class="lobby-section">
+          <label class="settings-group__label">创建房间</label>
+          <div class="lobby-create">
+            <input type="text" class="lobby-input" id="roomNameInput" placeholder="房间名（可选）" maxlength="20">
+            <button class="btn btn--primary" id="btnCreateRoom">创建</button>
+          </div>
+        </div>
+
+        <!-- 加入房间 -->
+        <div class="lobby-section">
+          <label class="settings-group__label">加入房间</label>
+          <div class="lobby-create">
+            <input type="text" class="lobby-input" id="roomIdInput" placeholder="输入房间 ID" maxlength="10">
+            <button class="btn btn--primary" id="btnJoinRoom">加入</button>
+          </div>
+        </div>
+
+        <!-- 房间列表 -->
+        <div class="lobby-section">
+          <label class="settings-group__label">房间列表
+            <button class="lobby-refresh" id="btnRefreshRooms" title="刷新">🔄</button>
+          </label>
+          <div class="lobby-room-list" id="roomList">
+            <div class="lobby-empty">暂无房间</div>
+          </div>
+        </div>
+
+        <button class="btn btn--secondary settings-card__start" id="btnBackFromLobby">
+          ← 返回
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== 联机等待 ===== -->
+    <div class="waiting-overlay" id="waitingOverlay">
+      <div class="waiting-card">
+        <div class="waiting-spinner"></div>
+        <h2 class="waiting-card__title">等待对手加入…</h2>
+        <p class="waiting-card__info">房间 ID: <strong id="waitingRoomId">—</strong></p>
+        <p class="waiting-card__info">房间名: <span id="waitingRoomName">—</span></p>
+        <p class="waiting-card__tip">将房间 ID 分享给局域网内的朋友</p>
+        <button class="btn btn--secondary" id="btnLeaveRoom">取消等待</button>
+      </div>
+    </div>
+
+    <!-- 主内容 -->
+    <main class="main" id="gameMain">
+      <!-- 状态栏 -->
+      <div class="status-bar">
+        <div class="status-bar__player status-bar__player--black active" id="playerBlack">
+          <span class="status-bar__stone status-bar__stone--black"></span>
+          <span class="status-bar__label">你（黑棋）</span>
+        </div>
+        <div class="status-bar__info" id="statusText">轮到你落子</div>
+        <div class="status-bar__player status-bar__player--white" id="playerWhite">
+          <span class="status-bar__stone status-bar__stone--white"></span>
+          <span class="status-bar__label">AI（白棋）</span>
+        </div>
+      </div>
+
+      <!-- 棋盘容器 -->
+      <div class="board-container" id="boardContainer">
+        <canvas id="boardCanvas"></canvas>
+        <!-- 胜负弹窗 -->
+        <div class="result-overlay" id="resultOverlay">
+          <div class="result-card">
+            <div class="result-card__icon" id="resultIcon">🎉</div>
+            <div class="result-card__text" id="resultText">你赢了！</div>
+            <button class="btn btn--primary result-card__btn" id="resultNewGame">再来一局</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 控制按钮 -->
+      <div class="controls">
+        <button class="btn btn--primary" id="btnNewGame">
+          <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 4v6h6" />
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+          </svg>
+          新游戏
+        </button>
+        <button class="btn btn--secondary" id="btnUndo">
+          <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 14 4 9 9 4" />
+            <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+          </svg>
+          悔棋
+        </button>
+        <button class="btn btn--secondary" id="btnBackToMenu">
+          🏠 菜单
+        </button>
+      </div>
+
+      <!-- 分数 -->
+      <div class="scoreboard">
+        <div class="scoreboard__item">
+          <span class="scoreboard__label" id="scoreLabelLeft">你</span>
+          <span class="scoreboard__value" id="scorePlayer">0</span>
+        </div>
+        <div class="scoreboard__item">
+          <span class="scoreboard__label">平局</span>
+          <span class="scoreboard__value" id="scoreDraw">0</span>
+        </div>
+        <div class="scoreboard__item">
+          <span class="scoreboard__label" id="scoreLabelRight">AI</span>
+          <span class="scoreboard__value" id="scoreAI">0</span>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p id="footerTip">点击棋盘交叉点落子 · AI 思考中请稍候</p>
+    </footer>
+  </div>
+
+  <script src="index.js"></script>
+</body>
+
+</html>

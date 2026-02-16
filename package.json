@@ -1,0 +1,15 @@
+{
+  "name": "gomoku-lan",
+  "version": "1.0.0",
+  "description": "五子棋 — 支持人机对弈与局域网联机",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
